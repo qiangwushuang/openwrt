@@ -1,0 +1,113 @@
+#
+# This is free software, lisence use MIT.
+# 
+# Copyright (C) 2019 P3TERX <https://p3terx.com>
+# Copyright (C) 2019 KFERMercer <KFER.Mercer@gmail.com>
+# 
+# <https://github.com/KFERMercer/OpenWrt-CI>
+# 
+
+name: OpenWrt-CI-Build
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+    - 'v*'
+  watch:
+    types: [started]
+
+jobs:
+
+  build_openwrt:
+
+    name: Build OpenWrt and release
+    runs-on: ubuntu-18.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: master
+
+      - name: Space cleanup
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          docker rmi `docker images -q`
+          sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d
+          sudo -E apt-get -y purge azure-cli ghc* zulu* hhvm llvm* firefox google* dotnet* powershell openjdk* mysql* php*
+          sudo -E apt-get update
+          sudo -E apt-get -y install tree build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev libz-dev patch python3 unzip zlib1g-dev lib32gcc1 libc6-dev-i386 subversion flex uglifyjs gcc-multilib g++-multilib p7zip p7zip-full msmtp libssl-dev texinfo libglib2.0-dev xmlto qemu-utils upx libelf-dev autoconf automake libtool autopoint device-tree-compiler antlr3 gperf swig
+          sudo -E apt-get -y autoremove --purge
+          sudo -E apt-get clean
+
+          df -h
+
+      - name: Update feeds
+        run: |
+          sed -i 's/\"#src-git\"/\"src-git\"/g' ./feeds.conf.default
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Generate configuration file
+        run: make defconfig
+
+      # - name: Display configure
+      #   run: cat .config
+
+      - name: Make download
+        run: |
+          make download -j8
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile firmware
+        run: |
+          make -j$(nproc) || make -j1 V=s
+          echo "======================="
+          echo "Space usage:"
+          echo "======================="
+          df -h
+          echo "======================="
+          du -h --max-depth=1 ./ --exclude=build_dir --exclude=bin
+          du -h --max-depth=1 ./build_dir
+          du -h --max-depth=1 ./bin
+          echo "======================="
+          echo "Display tree:"
+          echo "======================="
+          tree ./bin/
+          echo "::set-env name=Openwrt_TAG::$(git show-ref --heads --hash=8)"
+          echo "::set-env name=BUILD_DATE::$(date +%Y%m%d%H%M)"
+
+
+      - name: Move Release File
+        # run: |
+        #  find ./bin/targets/ -type d -name "packages" | xargs rm -rf {}
+        #  mkdir -p /opt/images/
+        #  sudo cp -rf ./bin/targets/bcm53xx/generic/* /opt/images/
+        #  ls ./bin/targets/bcm53xx/generic/
+        #  ls /opt/images/
+        run: |
+          ls ./bin/targets/bcm53xx/generic/
+          sudo mkdir -p /opt/images/
+          sudo cp ./bin/targets/bcm53xx/generic/*phicomm-k3* /opt/images/
+          sudo cp ./bin/targets/bcm53xx/generic/*.buildinfo /opt/images/
+          sudo sha256sum /opt/images/* > /opt/images/sha256sum.txt
+
+
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          artifacts: "/opt/images/*.*"
+          allowUpdates: true 
+          commit: master 
+          tag: ${{ env.BUILD_DATE }}_Openwrt_${{ env.Openwrt_TAG }}
+          body: |
+            Fork from [coolsnowwolf/lede](https://github.com/coolsnowwolf/lede) build for k3 by qiangwushuang
+          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
