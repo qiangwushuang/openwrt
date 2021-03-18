@@ -1183,7 +1183,7 @@ Signed-off-by: Zhao Chenhui <chenhui.zhao@freescale.com>
  #endif				/* _EHCI_FSL_H */
 --- a/drivers/usb/host/ehci-hub.c
 +++ b/drivers/usb/host/ehci-hub.c
-@@ -305,6 +305,8 @@ static int ehci_bus_suspend (struct usb_
+@@ -304,6 +304,8 @@ static int ehci_bus_suspend (struct usb_
  						USB_PORT_STAT_HIGH_SPEED)
  				fs_idle_delay = true;
  			ehci_writel(ehci, t2, reg);
@@ -1340,7 +1340,7 @@ Signed-off-by: Zhao Chenhui <chenhui.zhao@freescale.com>
  		while (ep_ring->dequeue != td->last_trb)
 --- a/drivers/usb/host/xhci.c
 +++ b/drivers/usb/host/xhci.c
-@@ -1604,13 +1604,38 @@ static int xhci_urb_dequeue(struct usb_h
+@@ -1605,13 +1605,38 @@ static int xhci_urb_dequeue(struct usb_h
  			ret = -ENOMEM;
  			goto done;
  		}
